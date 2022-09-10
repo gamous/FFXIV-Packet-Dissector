@@ -4,7 +4,7 @@ This repository contains Wireshark plugins for analyzing network packets of Fina
 
 ## Usage
 
-Copy all the files under `src/` to [the plugin folder](https://www.wireshark.org/docs/wsug_html_chunked/ChPluginFolders.html), then click \[Analyze] - 
+Copy [oo2net.dll](https://github.com/gamous/LuaOodle/releases/) to the Wireshark's root folder and copy all the files under `src/` to [the plugin folder](https://www.wireshark.org/docs/wsug_html_chunked/ChPluginFolders.html), then click \[Analyze] - 
 \[Reload Lua Plugins] (or press `Ctrl + Shift + L`). There should be packets recognized by the plugin with `Protocol` set to `FFXIV`.
 
 For Windows users, `mklink.bat` is provided to create a symbolic link from the plugin folder to the cloned repository.
@@ -37,7 +37,7 @@ This repository uses a JSON-based schema to describe IPC packets and generate di
 for structure described in TypeScript.
 
 ## LICENSE
- 
+
 [GPL v3](LICENSE)
 
 FINAL FANTASY, FINAL FANTASY XIV, FFXIV, SQUARE ENIX, and the SQUARE ENIX logo are registered trademarks or trademarks of Square Enix Holdings Co., Ltd.

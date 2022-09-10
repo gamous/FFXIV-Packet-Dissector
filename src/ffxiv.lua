@@ -1,6 +1,19 @@
 local ffxiv_proto = Proto("ffxiv", "FFXIV Bundle")
 local MAX_PACKET_LENGTH = 4096
 
+oodle = require("oo2net9")
+oo_state,oo_shared,oo_window=oodle.Initialize()
+local function Oodle_decompress(tvb_range,uncomp_len,name)
+    if oodle == nil then
+      return nil
+    end
+    local comp_data = tvb_range:raw()
+    local comp_len = tvb_range:len()
+    raw=oodle.Decompress(comp_data,comp_len,uncomp_len)
+    ba=ByteArray.new(raw,true)
+    return ba:tvb(name):range(0,uncomp_len)
+end
+
 local function makeValString(enumTable)
   local t = {}
   for name,num in pairs(enumTable) do
@@ -22,14 +35,13 @@ local bundle_hdr_fields =
     magic2     = ProtoField.uint32("ffxiv.magic2", "Magic 2", base.HEX),
     magic3     = ProtoField.uint32("ffxiv.magic3", "Magic 3", base.HEX),
     epoch      = ProtoField.uint64("ffxiv.epoch", "Epoch", base.DEC),
-    bundle_len = ProtoField.uint16("ffxiv.bundle_len", "Length", base.DEC),
-    unknown1   = ProtoField.uint16("ffxiv.unknown1", "Unknown1", base.HEX),
+    bundle_len = ProtoField.uint32("ffxiv.bundle_len", "Length", base.DEC),
     conn_type  = ProtoField.uint16("ffxiv.conn_type", "Connection Type", base.HEX),
     msg_count  = ProtoField.uint16("ffxiv.msg_count", "Message Count", base.DEC),
     encoding   = ProtoField.uint8("ffxiv.encoding", "Encoding", base.HEX),
     compressed = ProtoField.uint8("ffxiv.compressed", "Compressed", base.DEC),
     unknown3   = ProtoField.uint16("ffxiv.unknown3", "unknown3", base.HEX),
-    unknown4   = ProtoField.uint16("ffxiv.unknown4", "unknown4", base.HEX),
+    uncomp_len = ProtoField.uint16("ffxiv.uncomp_len", "Decompressed Length", base.Dec),
     unknown5   = ProtoField.uint16("ffxiv.unknown5", "unknown5", base.HEX),
     data       = ProtoField.bytes("ffxiv.data", "Bundle Data", base.NONE),
 }
@@ -118,14 +130,9 @@ dissectBundle = function (tvbuf, pktinfo, root, offset)
   tree:add_le(bundle_hdr_fields.epoch, epoch_tvbr)
 
   -- dissect the bundle_len field
-  local bundle_len_tvbr = tvbuf:range(offset + 24, 2)
+  local bundle_len_tvbr = tvbuf:range(offset + 24, 4)
   local bundle_len_val  = bundle_len_tvbr:le_uint()
   tree:add_le(bundle_hdr_fields.bundle_len, bundle_len_tvbr)
-
-  -- dissect the unknown1 field
-  local unknown1_tvbr = tvbuf:range(offset + 26, 2)
-  local unknown1_val  = unknown1_tvbr:le_uint()
-  tree:add_le(bundle_hdr_fields.unknown1, unknown1_tvbr)
 
   -- dissect the conn_type field
   local conn_type_tvbr = tvbuf:range(offset + 28, 2)
@@ -148,7 +155,10 @@ dissectBundle = function (tvbuf, pktinfo, root, offset)
   local compressed_tvbr = tvbuf:range(offset + 33, 1)
   local compressed_val  = compressed_tvbr:le_uint()
   if compressed_val == 1 then
-    tree:append_text(", Compressed")
+    tree:append_text(", Compressed(Zlib)")
+  end
+  if compressed_val == 2 then
+    tree:append_text(", Compressed(Oodle)")
   end
   tree:add_le(bundle_hdr_fields.compressed, compressed_tvbr)
 
@@ -157,10 +167,10 @@ dissectBundle = function (tvbuf, pktinfo, root, offset)
   local unknown3_val  = unknown3_tvbr:le_uint()
   tree:add_le(bundle_hdr_fields.unknown3, unknown3_tvbr)
 
-  -- dissect the unknown4 field
-  local unknown4_tvbr = tvbuf:range(offset + 36, 2)
-  local unknown4_val  = unknown4_tvbr:le_uint()
-  tree:add_le(bundle_hdr_fields.unknown4, unknown4_tvbr)
+  -- dissect the uncomp_len field
+  local uncomp_len_tvbr = tvbuf:range(offset + 36, 2)
+  local uncomp_len_val  = uncomp_len_tvbr:le_uint()
+  tree:add_le(bundle_hdr_fields.uncomp_len, uncomp_len_tvbr)
 
   -- dissect the unknown5 field
   local unknown5_tvbr = tvbuf:range(offset + 38, 2)
@@ -170,6 +180,9 @@ dissectBundle = function (tvbuf, pktinfo, root, offset)
   local data_tvbr = tvbuf:range(offset + FFXIV_BUNDLE_HDR_LEN, length_val - FFXIV_BUNDLE_HDR_LEN)
   if compressed_val == 1 then
     data_tvbr = data_tvbr:uncompress('SegementData')
+  end
+  if compressed_val == 2 then
+    data_tvbr = Oodle_decompress(data_tvbr,uncomp_len_val,'SegementData')
   end
   tree:add(bundle_hdr_fields.data, data_tvbr)
   
